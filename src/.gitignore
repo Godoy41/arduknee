@@ -1,0 +1,3 @@
+# A senha do Wi-Fi do aparelho nunca vai para o repositorio publico
+# (o modelo Segredos.h.example fica versionado)
+ArduKnee_Firmware/Segredos.h

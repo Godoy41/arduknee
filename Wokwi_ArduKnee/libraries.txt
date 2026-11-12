@@ -1,0 +1,3 @@
+# So' necessario se voce desativar SEM_WIFI em ConfigBuild.h.
+# ESP32Async/ESPAsyncWebServer
+# ESP32Async/AsyncTCP

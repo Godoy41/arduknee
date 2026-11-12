@@ -1,0 +1,16 @@
+#ifndef FEEDBACK_DISPATCHER_H
+#define FEEDBACK_DISPATCHER_H
+
+enum TipoEvento {
+  CONFIGURACAO_OK,
+  CONFIGURACAO_INVALIDA,
+  REPETICAO_CORRETA,
+  META_ATINGIDA,
+  INSTABILIDADE,
+  RESET,
+  QUASE_LA
+};
+
+void dispararEvento(TipoEvento evento);
+
+#endif
