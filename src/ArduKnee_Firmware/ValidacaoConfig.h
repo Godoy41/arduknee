@@ -1,17 +1,22 @@
 #ifndef VALIDACAO_CONFIG_H
 #define VALIDACAO_CONFIG_H
 
-// Limites da configuracao de sessao. Os valores definitivos de angulo e
-// repeticoes devem ser definidos com um fisioterapeuta (prototipo educacional).
-// tipoExercicio: 1 = E1 Flexao, 2 = E2 Extensao, 3 = E3 Ciclo completo.
-// perfil: 1 a 6 (P1 a P6).
-// anguloAlvo: na Flexao e no Ciclo completo fica ACIMA do inicial; na Extensao, ABAIXO.
-#define ANGULO_MIN_GRAUS   0
-#define ANGULO_MAX_GRAUS   90
-#define REPETICOES_MAXIMAS 100
+#include "Tipos.h"
+
+// RF04: limites de projeto do MVP (mapeamento do sensor e arco-guia).
+// Repeticoes: apenas "> 0" (decisao da equipe: sem teto de 100).
+#define ANGULO_MIN_GRAUS 0
+#define ANGULO_MAX_GRAUS 90
 
 // Funcao PURA (PT 4.2.9): sem Arduino, sem Wi-Fi, sem efeito colateral.
-// Retorna nullptr se a configuracao e' valida, ou o texto do erro.
+// tipoExercicio: 1=E1, 2=E2, 3=E3. perfil: 1 a 6.
+// E1/E3: 0 <= inicial < alvo <= 90.   E2: 0 <= alvo < inicial <= 90.
+// Retorna nullptr se valida, ou o texto do erro.
 const char* validarConfig(int tipoExercicio, int perfil, int anguloInicial, int anguloAlvo, int repeticoes);
+
+// RF40: aviso clinico (E2 + perfil P1/P2/P5 + alvo <= 40). Funcao pura.
+bool requerAvisoClinico(int tipoExercicio, int perfil, int anguloAlvo);
+
+extern const char* const MENSAGEM_AVISO_CLINICO;  // texto proposto no RF40 (validar com o fisioterapeuta)
 
 #endif

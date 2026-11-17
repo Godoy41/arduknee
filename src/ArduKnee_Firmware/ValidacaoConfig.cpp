@@ -1,5 +1,9 @@
 #include "ValidacaoConfig.h"
 
+const char* const MENSAGEM_AVISO_CLINICO =
+    "Faixa angular sinalizada para atenção clínica em extensão em cadeia cinética aberta. "
+    "Confirme com base no protocolo clínico do paciente antes de prosseguir.";
+
 const char* validarConfig(int tipoExercicio, int perfil, int anguloInicial, int anguloAlvo, int repeticoes) {
   if (tipoExercicio < 1 || tipoExercicio > 3) return "Tipo de exercício inválido.";
   if (perfil < 1 || perfil > 6) return "Perfil clínico inválido.";
@@ -10,6 +14,10 @@ const char* validarConfig(int tipoExercicio, int perfil, int anguloInicial, int 
   } else {
     if (anguloAlvo <= anguloInicial) return "Na flexão e no ciclo completo, o ângulo alvo deve ser maior que o inicial.";
   }
-  if (repeticoes <= 0 || repeticoes > REPETICOES_MAXIMAS) return "As repetições devem estar entre 1 e 100.";
+  if (repeticoes <= 0) return "O número de repetições deve ser maior que zero.";
   return nullptr;
+}
+
+bool requerAvisoClinico(int tipoExercicio, int perfil, int anguloAlvo) {
+  return tipoExercicio == 2 && (perfil == 1 || perfil == 2 || perfil == 5) && anguloAlvo <= 40;
 }

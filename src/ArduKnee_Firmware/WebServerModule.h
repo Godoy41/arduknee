@@ -2,23 +2,30 @@
 #define WEB_SERVER_MODULE_H
 
 #include <Arduino.h>
+#include "Tipos.h"
 
-// Parametros recebidos via POST /configurar.
-struct ParametrosSessao {
-  int tipoExercicio;  // 1 = E1 Flexao, 2 = E2 Extensao, 3 = E3 Ciclo completo
-  int perfil;         // 1 a 6 (P1 a P6)
-  int anguloInicial;
-  int anguloMaximo;   // significa "angulo alvo"
-  int repeticoes;
+// Access Point + Portal Cativo + endpoints (UML v2.5 sec. 5):
+//   GET /  |  GET /status  |  POST /configurar  |  POST /calibrar
+// NAO existem /reset nem /encerrar (RF41): Reset e Encerrar sao so fisicos.
+//
+// Regra de concorrencia (RNF20): o callback HTTP roda na tarefa async_tcp. Ele so
+//   (1) le a FOTO do estado publicada pelo loop(),
+//   (2) valida o pedido (funcoes puras de ProtocoloHttp),
+//   (3) deixa o pedido numa caixa de correio protegida por secao critica.
+// Quem escreve nas variaveis da sessao e' sempre o loop().
+
+struct Pendencias {
+  bool config;                 // chegou uma configuracao valida
+  ParametrosSessao params;
+  bool calibrar;               // chegou um pedido de calibracao valido
+  int anguloReferencia;
+  bool configInvalida;         // um POST /configurar foi rejeitado com 400 (feedback fisico)
 };
 
 void webServerModuleInit();
-void webServerModuleLoop();  // atende o DNS do Portal Cativo - chamar a cada loop()
-
-// Se chegou uma configuracao nova desde a ultima chamada, copia para "saida" e
-// retorna true. Thread-safe: o callback HTTP roda em outra tarefa do FreeRTOS e o
-// acesso aos dados e' protegido por secao critica (PB-08 / RNF20). Se chegarem
-// duas configuracoes seguidas, vale a ultima, inteira - nunca valores misturados.
-bool webServerModuleObterNovaConfig(ParametrosSessao &saida);
+void webServerModuleLoop();                                     // DNS do Portal Cativo - a cada loop()
+void webServerModulePublicarStatus(const StatusSnapshot& snap); // a cada loop(): foto para o callback
+// Copia e LIMPA os pedidos pendentes (atomico). true se havia algo.
+bool webServerModuleObterPendencias(Pendencias& saida);
 
 #endif

@@ -1,68 +1,87 @@
-// ArduKnee - ponto de entrada no PlatformIO (src/main.cpp).
-// Equivale ao ArduKnee_Firmware.ino: so orquestra os modulos que ficam em
-// src/ArduKnee_Firmware/. Nao ha "classe main" em C++/Arduino: o programa comeca
-// em setup() (uma vez) e repete loop() para sempre.
+// =====================================================================================
+// ArduKnee - firmware MODULAR - versao PlatformIO (src/main.cpp)
+// Substitui o ArduKnee_Firmware.ino: o main.cpp SO ORQUESTRA (setup/loop); cada modulo
+// (.h/.cpp) fica em src/ArduKnee_Firmware/ e cuida da sua responsabilidade (RNF07/RNF17).
+//
+// Regras de ouro: zero delay() no loop (RNF21); dados compartilhados com o callback HTTP
+// so por secao critica (RNF20); /status idempotente (RNF22); CSV nao bloqueante (RF34).
+//
+// Requisitos de ambiente:
+//  - plataforma pioarduino (Arduino-ESP32 3.x) no platformio.ini
+//  - bibliotecas ESP32Async/ESPAsyncWebServer e ESP32Async/AsyncTCP (lib_deps)
+//  - src/ArduKnee_Firmware/Segredos.h (copie Segredos.h.example e defina a senha do Wi-Fi)
+// =====================================================================================
+
 #include <Arduino.h>
 
 #include "ArduKnee_Firmware/Pinout.h"
+#include "ArduKnee_Firmware/Tipos.h"
+#include "ArduKnee_Firmware/Log.h"
+#include "ArduKnee_Firmware/Armazenamento.h"
 #include "ArduKnee_Firmware/SensorModule.h"
 #include "ArduKnee_Firmware/InputManager.h"
 #include "ArduKnee_Firmware/GameLogic.h"
-#include "ArduKnee_Firmware/ActuatorModule.h"
-#include "ArduKnee_Firmware/WebServerModule.h"
 #include "ArduKnee_Firmware/FeedbackDispatcher.h"
+#include "ArduKnee_Firmware/ActuatorModule.h"
+#include "ArduKnee_Firmware/CsvExport.h"
+#include "ArduKnee_Firmware/WebServerModule.h"
 
 namespace {
-  unsigned long ultimaLeituraSensor = 0;
-  const unsigned long INTERVALO_LEITURA_MS = 50;  // 20 Hz
+  const unsigned long INTERVALO_LEITURA_MS = 50;       // 20 Hz (RF13 / RF29)
+  const unsigned long INTERVALO_PUBLICACAO_MS = 10;    // foto do estado para o HTTP (polling e' de 2 s)
+  unsigned long ultimaAmostragemMs = 0;
+  unsigned long ultimaPublicacaoMs = 0;
 }
 
 void setup() {
   Serial.begin(115200);
-
+  armazenamentoInit();
   sensorModuleInit();
   inputManagerInit();
-  gameLogicInit();
   actuatorModuleInit();
+  feedbackInit();
+  gameLogicInit();
   webServerModuleInit();
-
-  Serial.println("[main] Sprint 1 - PoC inicializado.");
+  logInfo("[main] ArduKnee pronto. Aguardando configuracao via Wi-Fi.");
 }
 
 void loop() {
   unsigned long agora = millis();
 
-  // Leitura do sensor a 20 Hz - zero delay() no loop principal (RNF21)
-  if (agora - ultimaLeituraSensor >= INTERVALO_LEITURA_MS) {
-    ultimaLeituraSensor = agora;
-    LeituraSensor leitura = sensorModuleLer();
-    gameLogicProcessarLeitura(leitura);
-
-    if (leitura.instavel) {
-      dispararEvento(INSTABILIDADE);  // o dispatcher limita a 1 aviso por segundo
+  // 1) Sensor a cada 50 ms. Em Sessao Pausada a leitura fica suspensa (UML v2.5).
+  if (agora - ultimaAmostragemMs >= INTERVALO_LEITURA_MS) {
+    ultimaAmostragemMs = agora;
+    if (gameLogicGetEstado() != SESSAO_PAUSADA) {
+      LeituraSensor leitura = sensorModuleLer();
+      gameLogicProcessarLeitura(leitura);
     }
   }
 
-  // Classificacao de botoes (CURTA/LONGA)
+  // 2) Botoes -> eventos classificados (CURTA/LONGA) -> maquina de estados
   EventoBotao evento;
-  if (inputManagerPoll(evento)) {
-    gameLogicProcessarEvento(evento);
-  }
+  if (inputManagerPoll(evento)) gameLogicProcessarEvento(evento);
 
-  // Servidor web: DNS do Portal Cativo + coleta de configuracao nova (thread-safe)
+  // 3) Pedidos vindos do HTTP (ja validados pelo callback) entram AQUI, no loop()
   webServerModuleLoop();
-  ParametrosSessao novaConfig;
-  if (webServerModuleObterNovaConfig(novaConfig)) {
-    // Sprint 2: gameLogicAplicarConfig(novaConfig) - cancela o timer de 5 s (RF30)
-    dispararEvento(CONFIGURACAO_OK);  // bipe curto: a configuracao foi aceita
-    Serial.printf("[main] Nova config: exercicio E%d, perfil P%d, %d a %d graus, %d repeticoes\n",
-                  novaConfig.tipoExercicio, novaConfig.perfil,
-                  novaConfig.anguloInicial, novaConfig.anguloMaximo, novaConfig.repeticoes);
+  Pendencias pend;
+  if (webServerModuleObterPendencias(pend)) {
+    if (pend.configInvalida) dispararEvento(CONFIGURACAO_INVALIDA);
+    if (pend.config) gameLogicAplicarConfig(pend.params);
+    if (pend.calibrar) gameLogicCalibrar(pend.anguloReferencia);   // depois da config: mesma ordem do fluxo
   }
 
-  // Desliga o buzzer quando o tempo pedido acabar (nao bloqueante)
-  actuatorModuleTick();
-
-  // Timers da maquina de estados - Sprint 2 (RF30)
+  // 4) Timers, atuadores e CSV (todos nao bloqueantes)
   gameLogicTick();
+  feedbackTick();
+  csvExportTick();
+
+  // 5) Foto do estado para o callback de GET /status e para os 409. A cada 10 ms basta:
+  //    o loop() re-valida tudo ao consumir um pedido, entao uma foto levemente velha e' inofensiva
+  //    - e evita entrar na secao critica centenas de milhares de vezes por segundo.
+  if (agora - ultimaPublicacaoMs >= INTERVALO_PUBLICACAO_MS) {
+    ultimaPublicacaoMs = agora;
+    StatusSnapshot snap;
+    gameLogicObterSnapshot(snap);
+    webServerModulePublicarStatus(snap);
+  }
 }

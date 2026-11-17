@@ -1,8 +1,8 @@
 #ifndef PINOUT_H
 #define PINOUT_H
 
-// Pinout oficial - ArduKnee Circuito Eletrico v2.7 (fonte unica da verdade).
-// Qualquer mudanca de pino e' feita SO AQUI, nunca direto dentro de um modulo.
+// Pinout oficial - ArduKnee Circuito Eletrico v2.7 / layout ArduKnee_v3_4.json
+// (fonte unica da verdade). Qualquer mudanca de pino e' feita SO AQUI.
 
 // Sensor
 #define PINO_POTENCIOMETRO 34   // ADC1_CH6 - so entrada, sem pull-up/down interno
@@ -13,8 +13,14 @@
 #define PINO_BOTAO_RESET    17  // (DevKit V1). Em modulos WROVER (PSRAM) ficam ocupados.
 
 // Atuadores
-#define PINO_SERVO  13  // PWM, 50Hz, alimentado em 5V - NUNCA no 3V3
-#define PINO_BUZZER 23  // aciona a BASE do transistor 2N2222 - GPIO nunca liga o buzzer direto
+#define PINO_SERVO  13  // PWM 50 Hz, alimentado em 5 V (boost) - NUNCA no 3V3
+#define PINO_BUZZER 23  // BASE do 2N2222 (via 1 kohm). Buzzer PASSIVO: o tom e' gerado por PWM (LEDC)
+
+// Canais LEDC fixos. No core 3.x cada PAR de canais (0-1, 2-3, ...) compartilha um timer:
+// servo e buzzer ficam em pares diferentes para que mudar a frequencia do buzzer
+// NAO altere os 50 Hz do servo.
+#define LEDC_CANAL_SERVO  0
+#define LEDC_CANAL_BUZZER 2
 
 // Barra de 10 LEDs (progresso angular) - cada um com resistor 220 ohm em serie
 #define PINO_LED_1  14  // vermelho

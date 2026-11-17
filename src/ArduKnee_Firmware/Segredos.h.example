@@ -1,0 +1,8 @@
+#ifndef SEGREDOS_H
+#define SEGREDOS_H
+
+// Copie este arquivo para Segredos.h (esta no .gitignore - NAO vai para o repositorio
+// nem para zips compartilhados). Senha do Wi-Fi do aparelho: 8 a 63 caracteres (WPA2).
+#define SENHA_AP "troque-esta-senha"
+
+#endif
